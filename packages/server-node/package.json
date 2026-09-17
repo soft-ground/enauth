@@ -5,7 +5,7 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "license": "UNLICENSED",
+  "license": "MIT OR Apache-2.0",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "tsc -p tsconfig.json && node --test \"dist/**/*.test.js\""

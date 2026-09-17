@@ -3,7 +3,7 @@ name = "clasp-core"
 version = "0.1.0"
 edition = "2021"
 description = "CLASP crypto core: Basalt KDF, key derivation, and VOPRF primitives."
-license = "UNLICENSED"
+license = "MIT OR Apache-2.0"
 
 # NOTE: dependency versions are provisional; pin exact versions and review
 # licenses before first release (see docs/implementation-design.md §8).
