@@ -1,0 +1,10 @@
+{
+  "cases": [
+    {
+      "input_hex": "6f7072662d696e7075742d6279746573",
+      "key_hex": "3900bfdcfecd00df47b7ec206d99989256df29f294ce722c37365aede9ad990c",
+      "rw_hex": "2edf8d8c844ba86947ba3e0fa6ca522199c99b09fde80e79cb0dbed3423545e6723cd1aac973cc02766ebda46d40bb47beb21c63a2ad75c7239d8565e7a65ff7"
+    }
+  ],
+  "description": "rw = OPRF(k_oprf, input), VOPRF over ristretto255 (RFC 9497). Deterministic output the blind->eval->finalize path unblinds to."
+}

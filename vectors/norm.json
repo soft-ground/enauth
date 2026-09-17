@@ -1,0 +1,20 @@
+{
+  "cases": [
+    {
+      "norm_hex": "3911825e975dfd9d2922c7fdd3610859fe67c6a53fc2594b5363b7e96a361108",
+      "pw_utf8": "correct horse battery staple",
+      "uid_utf8": "alice@example.com"
+    },
+    {
+      "norm_hex": "1fb3180ab2e438923bbb6c223b748a2decf41dd078c1d039313627ab6c732ba9",
+      "pw_utf8": "",
+      "uid_utf8": "bob"
+    },
+    {
+      "norm_hex": "cc31b1265d21d56f2cefe278da28f140f6d7e9116f060f652e958ae2a8e96c8a",
+      "pw_utf8": "p@ssw0rd🔐",
+      "uid_utf8": "user-123"
+    }
+  ],
+  "description": "Norm(pw,uid) = HKDF-SHA512(ikm=pw, salt=uid, info=\"enauth/basalt/v1\")[:32]; pw/uid are UTF-8"
+}

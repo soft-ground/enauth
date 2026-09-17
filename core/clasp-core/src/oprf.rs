@@ -43,6 +43,14 @@ pub fn eval(key: &[u8], blinded_element: &[u8]) -> Result<Vec<u8>, voprf::Error>
     Ok(server.blind_evaluate(&element).serialize().to_vec())
 }
 
+/// Server: compute the deterministic OPRF output `rw` for `input` directly
+/// (unblinded). Equals what the client's blind → eval → finalize path yields;
+/// useful for test vectors.
+pub fn evaluate(key: &[u8], input: &[u8]) -> Result<Vec<u8>, voprf::Error> {
+    let server = OprfServer::<Cs>::new_with_key(key)?;
+    Ok(server.evaluate(input)?.to_vec())
+}
+
 /// Client: unblind and finalize into `rw`, the input to Basalt.
 pub fn finalize(
     state: &[u8],

@@ -1,0 +1,13 @@
+{
+  "cases": [
+    {
+      "a_hex": "d93f0fe65ce16b984eae8eb2e063de3e346e921f6372d486a7780af04599fa24",
+      "m_kib": 32,
+      "p": 1,
+      "preimage_hex": "626173616c742d707265696d6167652d30313233343536373839",
+      "salt_c_hex": "30313233343536373839616263646566",
+      "t": 1
+    }
+  ],
+  "description": "A = Argon2id(v1.3, m_kib, t, p, out=32). Production profile Basalt-v1 = {m_kib:65536,t:3,p:1}."
+}
