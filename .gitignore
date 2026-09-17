@@ -1,0 +1,14 @@
+# Rust
+/target
+**/target
+
+# Node
+node_modules/
+dist/
+
+# wasm-pack output
+core/clasp-wasm/pkg/
+
+# Misc
+.DS_Store
+*.log

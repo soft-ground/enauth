@@ -1,0 +1,15 @@
+[package]
+name = "clasp-wasm"
+version = "0.1.0"
+edition = "2021"
+description = "wasm-bindgen wrapper exposing clasp-core to JavaScript."
+license = "UNLICENSED"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+clasp-core = { path = "../clasp-core" }
+wasm-bindgen = "0.2"
+# `js` feature routes randomness to the Web Crypto API in the browser.
+getrandom = { version = "0.2", features = ["js"] }

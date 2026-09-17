@@ -1,0 +1,7 @@
+{
+  "name": "enauth",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Enhanced authentication method implementing the CLASP protocol.",
+  "license": "UNLICENSED"
+}
