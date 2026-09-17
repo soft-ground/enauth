@@ -7,8 +7,15 @@
 // independently of the generated bindings. Use `loadClaspWasm` (./wasm) to
 // obtain a real instance.
 
+/** Output of the WASM `oprf_blind`: opaque client state + blinded element. */
+export interface OprfBlindResult {
+  readonly state: Uint8Array;
+  readonly blinded: Uint8Array;
+}
+
 /** The subset of the generated clasp-wasm bindings this SDK uses. */
 export interface ClaspWasm {
+  // Baseline profile
   derive_public_key(
     password: Uint8Array,
     uid: Uint8Array,
@@ -20,6 +27,26 @@ export interface ClaspWasm {
     uid: Uint8Array,
     salt_c: Uint8Array,
     version: string,
+    message: Uint8Array,
+  ): Uint8Array;
+
+  // CLASP-OPRF profile
+  oprf_blind(password: Uint8Array, uid: Uint8Array): OprfBlindResult;
+  oprf_derive_public_key(
+    state: Uint8Array,
+    password: Uint8Array,
+    uid: Uint8Array,
+    salt_c: Uint8Array,
+    version: string,
+    evaluated: Uint8Array,
+  ): Uint8Array;
+  oprf_derive_and_sign(
+    state: Uint8Array,
+    password: Uint8Array,
+    uid: Uint8Array,
+    salt_c: Uint8Array,
+    version: string,
+    evaluated: Uint8Array,
     message: Uint8Array,
   ): Uint8Array;
 }
@@ -80,12 +107,6 @@ export function fromBase64Url(s: string): Uint8Array {
   return out;
 }
 
-function requireBaseline(oprfKeyVersion: string): void {
-  if (oprfKeyVersion !== "none") {
-    throw new Error("CLASP-OPRF profile is not yet implemented in this client");
-  }
-}
-
 export function createClaspClient(opts: ClaspClientOptions) {
   const doFetch = opts.fetch ?? fetch;
   const base = opts.baseUrl.replace(/\/$/, "");
@@ -98,20 +119,47 @@ export function createClaspClient(opts: ClaspClientOptions) {
     });
   }
 
+  async function oprfEval(
+    uid: string,
+    blinded: Uint8Array,
+    phase: "register" | "login",
+  ): Promise<Uint8Array> {
+    const res = await postJson("/clasp/v1/oprf/eval", {
+      uid,
+      blinded_element: toBase64Url(blinded),
+      phase,
+    });
+    if (!res.ok) throw new Error(`oprf/eval failed: ${res.status}`);
+    const body = (await res.json()) as { evaluated_element: string };
+    return fromBase64Url(body.evaluated_element);
+  }
+
   return {
-    /** Register a new account. init → derive pk (WASM) → finalize. */
+    /** Register a new account. Supports the baseline and OPRF profiles. */
     async register(uid: string, password: string): Promise<void> {
       const res = await postJson("/clasp/v1/register/init", { uid });
       if (!res.ok) throw new Error(`register/init failed: ${res.status}`);
       const init = (await res.json()) as RegisterInitResponse;
-      requireBaseline(init.oprf_key_version);
 
-      const pk = opts.wasm.derive_public_key(
-        encoder.encode(password),
-        encoder.encode(uid),
-        fromBase64Url(init.salt_c),
-        init.basalt_version,
-      );
+      const pw = encoder.encode(password);
+      const uidBytes = encoder.encode(uid);
+      const saltC = fromBase64Url(init.salt_c);
+
+      let pk: Uint8Array;
+      if (init.oprf_key_version === "none") {
+        pk = opts.wasm.derive_public_key(pw, uidBytes, saltC, init.basalt_version);
+      } else {
+        const blinded = opts.wasm.oprf_blind(pw, uidBytes);
+        const evaluated = await oprfEval(uid, blinded.blinded, "register");
+        pk = opts.wasm.oprf_derive_public_key(
+          blinded.state,
+          pw,
+          uidBytes,
+          saltC,
+          init.basalt_version,
+          evaluated,
+        );
+      }
 
       const fin = await postJson("/clasp/v1/register/finalize", {
         reg_token: init.reg_token,
@@ -120,22 +168,34 @@ export function createClaspClient(opts: ClaspClientOptions) {
       if (!fin.ok) throw new Error(`register/finalize failed: ${fin.status}`);
     },
 
-    /** Log in. init → derive A and sign the nonce (WASM) → verify. */
+    /** Log in. Supports the baseline and OPRF profiles. */
     async login(uid: string, password: string): Promise<Session> {
       const res = await postJson("/clasp/v1/login/init", { uid });
       if (!res.ok) throw new Error(`login/init failed: ${res.status}`);
       const init = (await res.json()) as LoginInitResponse;
-      requireBaseline(init.oprf_key_version);
 
+      const pw = encoder.encode(password);
+      const uidBytes = encoder.encode(uid);
+      const saltC = fromBase64Url(init.salt_c);
       const nonce = fromBase64Url(init.nonce);
       const message = buildAuthMessage(uid, nonce);
-      const sig = opts.wasm.derive_and_sign(
-        encoder.encode(password),
-        encoder.encode(uid),
-        fromBase64Url(init.salt_c),
-        init.basalt_version,
-        message,
-      );
+
+      let sig: Uint8Array;
+      if (init.oprf_key_version === "none") {
+        sig = opts.wasm.derive_and_sign(pw, uidBytes, saltC, init.basalt_version, message);
+      } else {
+        const blinded = opts.wasm.oprf_blind(pw, uidBytes);
+        const evaluated = await oprfEval(uid, blinded.blinded, "login");
+        sig = opts.wasm.oprf_derive_and_sign(
+          blinded.state,
+          pw,
+          uidBytes,
+          saltC,
+          init.basalt_version,
+          evaluated,
+          message,
+        );
+      }
 
       const verify = await postJson("/clasp/v1/login/verify", {
         uid,

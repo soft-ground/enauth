@@ -28,6 +28,14 @@ pub fn blind<R: RngCore + CryptoRng>(input: &[u8], rng: &mut R) -> Result<Blinde
     })
 }
 
+/// Server: generate a fresh `k_oprf` (serialized scalar) for a key version.
+pub fn generate_key<R: RngCore + CryptoRng>(rng: &mut R) -> Vec<u8> {
+    OprfServer::<Cs>::new(rng)
+        .expect("OPRF key generation")
+        .serialize()
+        .to_vec()
+}
+
 /// Server: evaluate a blinded element under the key `k_oprf[v]` (serialized scalar).
 pub fn eval(key: &[u8], blinded_element: &[u8]) -> Result<Vec<u8>, voprf::Error> {
     let server = OprfServer::<Cs>::new_with_key(key)?;

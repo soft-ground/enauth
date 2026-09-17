@@ -238,5 +238,33 @@ export function createClaspServer(opts: ClaspServerOptions) {
         .digest("base64url");
       return { status: 200, body: { session: { uid: user.uid, token, issuedAt } } };
     },
+
+    /** POST /clasp/v1/oprf/eval (CLASP-OPRF profile only) */
+    async oprfEval(body: {
+      uid?: string;
+      blinded_element?: string;
+      phase?: "register" | "login";
+    }): Promise<HandlerResult> {
+      if (!opts.oprfKeyProvider) {
+        return { status: 400, body: { error: "OPRF profile not enabled" } };
+      }
+      if (!body?.uid || !body?.blinded_element) {
+        return { status: 400, body: { error: "uid and blinded_element required" } };
+      }
+      await opts.rateLimiter.check(`oprf:${body.uid}`);
+
+      // Register uses the current key; login uses the user's stored version
+      // (unknown uid keeps the current version — uniform, anti-enumeration).
+      let version = opts.oprfKeyProvider.currentVersion();
+      if (body.phase === "login") {
+        const user = await opts.storage.getUser(body.uid);
+        if (user && user.oprfKeyVersion !== "none") version = user.oprfKeyVersion;
+      }
+      const evaluated = await opts.oprfKeyProvider.eval(version, b64u.dec(body.blinded_element));
+      return {
+        status: 200,
+        body: { evaluated_element: b64u.enc(evaluated), oprf_key_version: version },
+      };
+    },
   };
 }

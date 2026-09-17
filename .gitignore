@@ -10,6 +10,7 @@ dist/
 
 # wasm-pack output
 core/clasp-wasm/pkg/
+core/clasp-wasm/pkg-node/
 
 # Misc
 .DS_Store

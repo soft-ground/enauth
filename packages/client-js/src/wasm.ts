@@ -19,5 +19,8 @@ export async function loadClaspWasm(wasmUrl?: string | URL): Promise<ClaspWasm> 
   return {
     derive_public_key: mod.derive_public_key,
     derive_and_sign: mod.derive_and_sign,
+    oprf_blind: mod.oprf_blind,
+    oprf_derive_public_key: mod.oprf_derive_public_key,
+    oprf_derive_and_sign: mod.oprf_derive_and_sign,
   };
 }

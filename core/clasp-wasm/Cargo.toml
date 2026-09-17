@@ -13,3 +13,5 @@ clasp-core = { path = "../clasp-core" }
 wasm-bindgen = "0.2"
 # `js` feature routes randomness to the Web Crypto API in the browser.
 getrandom = { version = "0.2", features = ["js"] }
+# `OsRng` (RngCore + CryptoRng) for OPRF blinding, backed by getrandom above.
+rand_core = { version = "0.6", features = ["getrandom"] }
