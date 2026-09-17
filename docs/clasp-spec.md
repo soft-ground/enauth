@@ -126,19 +126,27 @@ Client                                   Server
   │  x  = Norm(pw, uid)                     │
   │  A  = Basalt(x, salt_c)      *HEAVY (client)
   │  sk = A                                 │
-  │  σ  = Sign(sk, "AUTH" ‖ uid ‖ n)        │
+  │  σ  = Sign(sk, M(uid, n))               │   // M = canonical auth message
   │                                         │
   │  -- login_verify(uid, n, σ) ------>     │
   │                                         │  assert nonces[n].unused AND not expired
-  │                                         │  ok = Verify(pk, "AUTH"‖uid‖n, σ)  *light (µs)
+  │                                         │  ok = Verify(pk, M(uid, n), σ)    *light (µs)
   │                                         │  consume(n)   // block reuse
   │  <-------- session / 401 -----------    │
 ```
 
+**Canonical auth message `M`.** To avoid any ambiguity when concatenating a variable-length `uid` with the nonce, the signed message is length-prefixed and domain-separated:
+
+```
+M(uid, n) = "CLASP-AUTH-v1" ‖ uint32_be(len(uid_utf8)) ‖ uid_utf8 ‖ n
+```
+
+`uid_utf8` is the UTF-8 encoding of `uid`; `n` is the raw 256-bit nonce. Client and server MUST build `M` identically. (The `"AUTH"` shorthand elsewhere in this document refers to this encoding.)
+
 **Nonce-signature property:** the value `σ` crossing the wire is deterministically bound to `n`. For distinct nonces `n₁ ≠ n₂`:
 
 ```
-Pr[ Verify(pk, "AUTH"‖uid‖n₂, σ(n₁)) = 1 ]  ≈  signature-forgery hardness (negligible)
+Pr[ Verify(pk, M(uid, n₂), σ(n₁)) = 1 ]  ≈  signature-forgery hardness (negligible)
 ```
 
 Therefore a captured `σ` is useless in any subsequent session.
@@ -202,9 +210,9 @@ A five-part structure satisfies this:
 **Why a naive design fails:** storing `V = H(A)` and sending `A` in the clear makes `A` itself the credential, so `replay(A) → H(A)=V → pass`. Since `A` is a static, session-independent value, reuse succeeds.
 
 **CLASP defenses:**
-- **Nonce-bound signature** `σ = Sign(A, "AUTH"‖uid‖n)`. The server manages `n` as single-use with a TTL and calls `consume(n)` after verification.
+- **Nonce-bound signature** `σ = Sign(A, M(uid, n))` (see §3.2 for `M`). The server manages `n` as single-use with a TTL and calls `consume(n)` after verification.
 - **Single-use + expiry** — `nonces[n]` is a state machine `{unused → consumed}`; resubmission is rejected on state mismatch.
-- **Channel binding (stronger)** — additionally binding a TLS exporter value into `σ` (`… ‖ tls_exporter`) blocks replay outside the originating session.
+- **Channel binding (stronger)** — additionally binding a TLS exporter value into the signed message (`M(uid, n) ‖ tls_exporter`) blocks replay outside the originating session.
 - Result: no long-lived credential ever exists on the network.
 
 ### 5.2 Threat B — Offline Dictionary Attack after DB Leak & User Enumeration
@@ -248,12 +256,12 @@ Moving heavy computation to the client removes server-side Argon2id DoS but intr
 - **TTL:** 60 s recommended (range 30–120 s), balancing clock skew and login UX against the replay window.
 - **Storage:** a store shared across all server instances (e.g., Redis), since `login_init` and `login_verify` may be handled by different instances. Key = `n`, value = `(uid, issued_at)`, with store-level TTL for automatic expiry.
 - **Atomic consume:** `login_verify` MUST atomically fetch-and-delete (compare-and-delete) the nonce so concurrent requests cannot use it twice — this closes the replay race in §5.1. Reject if the nonce is absent or expired.
-- **Binding:** reject if the nonce was not issued for the presented `uid`. (The signature is checked against `"AUTH"‖uid‖n`, so a cross-`uid` nonce cannot validate; reject early regardless.)
+- **Binding:** reject if the nonce was not issued for the presented `uid`. (The signature is checked against `M(uid, n)`, so a cross-`uid` nonce cannot validate; reject early regardless.)
 - Stateless (MAC-signed) nonces are possible but still require a consumed-set for strict single-use, so the stateful store is the recommended default.
 
 ### 6.2 Channel binding (TLS exporter)
 
-- Binding a TLS exporter value (RFC 9266 `tls-exporter`, TLS 1.3) into `σ` — i.e. `σ = Sign(sk, "AUTH"‖uid‖n‖tls_exporter)` — blocks replay even against an in-session TLS termination/MITM (§5.1).
+- Binding a TLS exporter value (RFC 9266 `tls-exporter`, TLS 1.3) into the signed message — i.e. `σ = Sign(sk, M(uid, n) ‖ tls_exporter)` — blocks replay even against an in-session TLS termination/MITM (§5.1).
 - **Browser limitation (honest):** standard browser JavaScript cannot access the TLS exporter, so channel binding is available only to **native/mobile clients** (or other non-browser environments) that can read it.
 - **Decision:** channel binding is **optional and platform-gated** — enable it where the client platform exposes the exporter; web clients rely on nonce single-use + TTL + TLS transport. It is NOT mandatory, as that would exclude web clients.
 
