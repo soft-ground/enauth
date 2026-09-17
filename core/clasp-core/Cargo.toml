@@ -7,17 +7,12 @@ license = "UNLICENSED"
 
 # NOTE: dependency versions are provisional; pin exact versions and review
 # licenses before first release (see docs/implementation-design.md §8).
+# Dependencies are added per-module as each is implemented, so the tree stays
+# minimal and each addition is verified by a build:
+#   - basalt: argon2
+#   - keys:   ed25519-dalek
+#   - oprf:   voprf (RFC 9497 VOPRF over ristretto255), subtle, rand_core
 [dependencies]
-argon2 = "0.5"
-ed25519-dalek = "2"
 hkdf = "0.12"
 sha2 = "0.10"
-subtle = "2.6"
 zeroize = { version = "1.8", features = ["derive"] }
-voprf = "0.5"        # RFC 9497 VOPRF over ristretto255
-rand_core = "0.6"
-
-[dev-dependencies]
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-hex = "0.4"
