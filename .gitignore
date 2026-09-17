@@ -1,8 +1,6 @@
 # Rust
 /target
 **/target
-# Library workspace — Cargo.lock left untracked for now (revisit at release).
-/Cargo.lock
 
 # Node
 node_modules/
