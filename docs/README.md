@@ -4,6 +4,7 @@
 - [Basalt Parameter Tuning](basalt-tuning.md) — the memory-hard KDF profile and its parameters
 - [Implementation Design](implementation-design.md) — reference-implementation architecture, API contract, SDK surfaces
 - [Dependency & License Audit](dependencies.md) — third-party licenses and version pinning
+- [Internal Security Review](security-review.md) — self-review findings + remediation (not an independent audit)
 
 ## Reference implementation
 
