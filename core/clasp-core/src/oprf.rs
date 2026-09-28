@@ -7,6 +7,7 @@
 
 use rand_core::{CryptoRng, RngCore};
 use voprf::{BlindedElement, EvaluationElement, OprfClient, OprfServer, Ristretto255};
+use zeroize::Zeroizing;
 
 type Cs = Ristretto255;
 
@@ -52,14 +53,16 @@ pub fn evaluate(key: &[u8], input: &[u8]) -> Result<Vec<u8>, voprf::Error> {
 }
 
 /// Client: unblind and finalize into `rw`, the input to Basalt.
+///
+/// `rw` is password-derived and sensitive; it is returned zeroize-on-drop.
 pub fn finalize(
     state: &[u8],
     input: &[u8],
     evaluated_element: &[u8],
-) -> Result<Vec<u8>, voprf::Error> {
+) -> Result<Zeroizing<Vec<u8>>, voprf::Error> {
     let client = OprfClient::<Cs>::deserialize(state)?;
     let element = EvaluationElement::<Cs>::deserialize(evaluated_element)?;
-    Ok(client.finalize(input, &element)?.to_vec())
+    Ok(Zeroizing::new(client.finalize(input, &element)?.to_vec()))
 }
 
 #[cfg(test)]
@@ -84,7 +87,7 @@ mod tests {
 
         // The blinded path must equal the server's direct (unblinded) evaluation.
         let direct = server.evaluate(input).unwrap().to_vec();
-        assert_eq!(rw, direct);
+        assert_eq!(rw.as_slice(), direct.as_slice());
     }
 
     #[test]

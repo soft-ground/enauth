@@ -29,9 +29,16 @@ export class InMemoryStorage implements StorageAdapter {
 export class InMemoryNonceStore implements NonceStore {
   private readonly nonces = new Map<string, { uid: string; exp: number }>();
 
-  constructor(private readonly ttlMs = 60_000) {}
+  constructor(
+    private readonly ttlMs = 60_000,
+    private readonly maxEntries = 100_000,
+  ) {}
 
   async issue(uid: string): Promise<Uint8Array> {
+    // Bound memory: unconsumed nonces are otherwise never removed, so a flood of
+    // login/init calls would grow the map without limit. In production use a
+    // store with native TTL eviction (e.g. Redis SET ... EX).
+    if (this.nonces.size >= this.maxEntries) this.sweep();
     const nonce = new Uint8Array(randomBytes(32));
     const key = Buffer.from(nonce).toString("base64url");
     this.nonces.set(key, { uid, exp: Date.now() + this.ttlMs });
@@ -45,6 +52,19 @@ export class InMemoryNonceStore implements NonceStore {
     if (!entry) return false;
     this.nonces.delete(key);
     return entry.uid === uid && entry.exp >= Date.now();
+  }
+
+  private sweep(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.nonces) {
+      if (entry.exp < now) this.nonces.delete(key);
+    }
+    // Hard cap: under a flood of still-valid nonces, evict oldest first.
+    while (this.nonces.size >= this.maxEntries) {
+      const oldest = this.nonces.keys().next().value;
+      if (oldest === undefined) break;
+      this.nonces.delete(oldest);
+    }
   }
 }
 

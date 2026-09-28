@@ -29,7 +29,8 @@ pub fn derive_public_key(
 ) -> Result<Vec<u8>, JsError> {
     let params = resolve_params(version)?;
     let preimage = norm::norm(password, uid);
-    let seed = basalt::basalt(&preimage[..], salt_c, &params);
+    let seed = basalt::basalt(&preimage[..], salt_c, &params)
+        .map_err(|e| JsError::new(&format!("basalt: {e}")))?;
     Ok(keys::public_key(&seed).to_vec())
 }
 
@@ -46,7 +47,8 @@ pub fn derive_and_sign(
 ) -> Result<Vec<u8>, JsError> {
     let params = resolve_params(version)?;
     let preimage = norm::norm(password, uid);
-    let seed = basalt::basalt(&preimage[..], salt_c, &params);
+    let seed = basalt::basalt(&preimage[..], salt_c, &params)
+        .map_err(|e| JsError::new(&format!("basalt: {e}")))?;
     Ok(keys::sign(&seed, message).to_vec())
 }
 
@@ -119,7 +121,8 @@ pub fn oprf_derive_public_key(
     let input = norm::norm(password, uid);
     let rw = oprf::finalize(state, &input[..], evaluated)
         .map_err(|e| JsError::new(&format!("oprf finalize: {e}")))?;
-    let seed = basalt::basalt(&rw, salt_c, &params);
+    let seed = basalt::basalt(&rw, salt_c, &params)
+        .map_err(|e| JsError::new(&format!("basalt: {e}")))?;
     Ok(keys::public_key(&seed).to_vec())
 }
 
@@ -139,6 +142,7 @@ pub fn oprf_derive_and_sign(
     let input = norm::norm(password, uid);
     let rw = oprf::finalize(state, &input[..], evaluated)
         .map_err(|e| JsError::new(&format!("oprf finalize: {e}")))?;
-    let seed = basalt::basalt(&rw, salt_c, &params);
+    let seed = basalt::basalt(&rw, salt_c, &params)
+        .map_err(|e| JsError::new(&format!("basalt: {e}")))?;
     Ok(keys::sign(&seed, message).to_vec())
 }

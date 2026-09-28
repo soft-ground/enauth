@@ -5,7 +5,7 @@
 // logic. Ed25519 verification uses @noble/curves (pure JS) — the server stays
 // lightweight (no memory-hard work, no WASM).
 
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, hkdfSync, randomBytes, timingSafeEqual } from "node:crypto";
 import { ed25519 } from "@noble/curves/ed25519";
 
 // ---------------------------------------------------------------------------
@@ -45,7 +45,7 @@ export interface ClaspServerOptions {
   nonceStore: NonceStore;
   oprfKeyProvider?: OprfKeyProvider | null; // null/undefined = baseline (no OPRF)
   rateLimiter: RateLimiter;
-  serverSecret: Uint8Array; // pseudo-salt (anti-enumeration) + reg_token signing
+  serverSecret: Uint8Array; // master secret; per-purpose subkeys derived via HKDF
 }
 
 // ---------------------------------------------------------------------------
@@ -128,12 +128,26 @@ function verifySignature(sig: Uint8Array, message: Uint8Array, pk: Uint8Array): 
   }
 }
 
+/** Domain-separated subkey from the server secret (HKDF-SHA256). */
+function subkey(secret: Uint8Array, label: string): Buffer {
+  return Buffer.from(hkdfSync("sha256", secret, new Uint8Array(0), Buffer.from(label, "utf8"), 32));
+}
+
+// A fixed valid public key, used to run a constant-work verify for unknown
+// users so login/verify timing does not reveal account existence.
+const DUMMY_PK = ed25519.getPublicKey(new Uint8Array(32).fill(1));
+
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
 
 export function createClaspServer(opts: ClaspServerOptions) {
   const oprfVersion = (): string => opts.oprfKeyProvider?.currentVersion() ?? "none";
+
+  // Per-purpose subkeys so one secret is not reused across HMAC contexts.
+  const kRegToken = subkey(opts.serverSecret, "clasp/reg-token/v1");
+  const kSalt = subkey(opts.serverSecret, "clasp/pseudo-salt/v1");
+  const kSession = subkey(opts.serverSecret, "clasp/session/v1");
 
   return {
     /** POST /clasp/v1/register/init */
@@ -160,7 +174,7 @@ export function createClaspServer(opts: ClaspServerOptions) {
           salt_c: payload.salt_c,
           basalt_version: payload.bv,
           oprf_key_version: payload.ov,
-          reg_token: signRegToken(opts.serverSecret, payload),
+          reg_token: signRegToken(kRegToken, payload),
         },
       };
     },
@@ -170,7 +184,7 @@ export function createClaspServer(opts: ClaspServerOptions) {
       if (!body?.reg_token || !body?.pk) {
         return { status: 400, body: { error: "reg_token and pk required" } };
       }
-      const payload = verifyRegToken(opts.serverSecret, body.reg_token);
+      const payload = verifyRegToken(kRegToken, body.reg_token);
       if (!payload) return { status: 400, body: { error: "invalid or expired reg_token" } };
 
       const record: UserRecord = {
@@ -193,9 +207,11 @@ export function createClaspServer(opts: ClaspServerOptions) {
       if (!body?.uid) return { status: 400, body: { error: "uid required" } };
       await opts.rateLimiter.check(`login-init:${body.uid}`);
 
-      // Uniform response for known and unknown uid (anti-enumeration).
+      // Uniform response for known and unknown uid (anti-enumeration). Always
+      // compute the pseudo-salt so the HMAC work happens on both paths.
       const user = await opts.storage.getUser(body.uid);
-      const saltC = user ? user.saltC : pseudoSalt(opts.serverSecret, body.uid);
+      const fallbackSalt = pseudoSalt(kSalt, body.uid);
+      const saltC = user ? user.saltC : fallbackSalt;
       const nonce = await opts.nonceStore.issue(body.uid);
       return {
         status: 200,
@@ -225,15 +241,16 @@ export function createClaspServer(opts: ClaspServerOptions) {
       // Atomic single-use consume first: a captured nonce cannot be replayed.
       if (!(await opts.nonceStore.consume(nonce, body.uid))) return unauthorized;
 
+      // Verify against a dummy key for unknown users too, so the Ed25519 work
+      // runs on both paths and login/verify timing does not reveal existence.
       const user = await opts.storage.getUser(body.uid);
-      if (!user) return unauthorized;
-
       const message = buildAuthMessage(body.uid, nonce);
-      if (!verifySignature(b64u.dec(body.sig), message, user.pk)) return unauthorized;
+      const ok = verifySignature(b64u.dec(body.sig), message, user ? user.pk : DUMMY_PK);
+      if (!user || !ok) return unauthorized;
 
       // Minimal reference session token; real session management is deployment-defined.
       const issuedAt = Date.now();
-      const token = createHmac("sha256", opts.serverSecret)
+      const token = createHmac("sha256", kSession)
         .update(`session|${user.uid}|${issuedAt}`)
         .digest("base64url");
       return { status: 200, body: { session: { uid: user.uid, token, issuedAt } } };

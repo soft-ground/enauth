@@ -74,7 +74,7 @@ fn basalt_vectors() -> Value {
     let p = basalt::Params { m_kib: 32, t: 1, p: 1 };
     let preimage = b"basalt-preimage-0123456789";
     let salt_c = b"0123456789abcdef";
-    let a = basalt::basalt(preimage, salt_c, &p);
+    let a = basalt::basalt(preimage, salt_c, &p).unwrap();
     json!({
         "description": "A = Argon2id(v1.3, m_kib, t, p, out=32). Production profile Basalt-v1 = {m_kib:65536,t:3,p:1}.",
         "cases": [{
@@ -137,7 +137,7 @@ fn transcript_vectors() -> Value {
 
     // Baseline: A = Basalt(Norm(pw,uid), salt_c)
     let n = norm::norm(pw.as_bytes(), uid.as_bytes());
-    let seed = basalt::basalt(&n[..], &salt_c, &p);
+    let seed = basalt::basalt(&n[..], &salt_c, &p).unwrap();
     let baseline = json!({
         "pw_utf8": pw, "uid_utf8": uid,
         "salt_c_hex": hx(&salt_c), "m_kib": 32, "t": 1, "p": 1,
@@ -151,7 +151,7 @@ fn transcript_vectors() -> Value {
     let mut rng = ChaCha20Rng::from_seed([7u8; 32]);
     let key = oprf::generate_key(&mut rng);
     let rw = oprf::evaluate(&key, &n[..]).unwrap();
-    let seed_o = basalt::basalt(&rw, &salt_c, &p);
+    let seed_o = basalt::basalt(&rw, &salt_c, &p).unwrap();
     let oprf_case = json!({
         "pw_utf8": pw, "uid_utf8": uid,
         "salt_c_hex": hx(&salt_c), "m_kib": 32, "t": 1, "p": 1,

@@ -16,9 +16,20 @@ const ROUTES: Record<string, keyof ClaspServer> = {
   "/clasp/v1/oprf/eval": "oprfEval",
 };
 
+// CLASP request bodies are tiny (a uid, a token, a few base64url blobs).
+const MAX_BODY_BYTES = 64 * 1024;
+
 async function readJson(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
-  for await (const chunk of req) chunks.push(chunk as Buffer);
+  let total = 0;
+  for await (const chunk of req) {
+    total += (chunk as Buffer).length;
+    if (total > MAX_BODY_BYTES) {
+      req.destroy();
+      throw Object.assign(new Error("payload too large"), { status: 413 });
+    }
+    chunks.push(chunk as Buffer);
+  }
   const raw = Buffer.concat(chunks).toString("utf8");
   return raw ? JSON.parse(raw) : {};
 }
@@ -42,8 +53,12 @@ export function createRequestListener(server: ClaspServer) {
       const handler = server[handlerName] as unknown as Handler;
       const result = await handler(body);
       sendJson(res, result.status, result.body);
-    } catch {
-      sendJson(res, 400, { error: "bad request" });
+    } catch (err) {
+      const status =
+        err && typeof err === "object" && typeof (err as { status?: unknown }).status === "number"
+          ? (err as { status: number }).status
+          : 400;
+      sendJson(res, status, { error: status === 413 ? "payload too large" : "bad request" });
     }
   };
 }
