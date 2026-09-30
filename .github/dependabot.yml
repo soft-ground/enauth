@@ -1,0 +1,37 @@
+version: 2
+
+updates:
+  # Rust crates (Cargo.lock). Updating Cargo.lock also requires regenerating
+  # THIRD-PARTY-NOTICES.md: `node scripts/generate-third-party-notices.mjs`.
+  # CI fails on a stale notices file, which flags this on the PR.
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    groups:
+      rust-minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  # JavaScript (pnpm workspace: root + packages/*).
+  - package-ecosystem: npm
+    directories: ["/", "/packages/*"]
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    groups:
+      js-minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  # GitHub Actions used by the workflows.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
