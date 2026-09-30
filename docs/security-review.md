@@ -35,6 +35,7 @@ adapters explicitly documented as development-only.
 |---|---|---|---|
 | M1 | Medium | server-node (ref adapter) | Nonce store grows unboundedly (no expiry sweep) → memory DoS |
 | M2 | Medium | server-node (http adapter) | Request body is buffered with no size limit → memory DoS |
+| M3 | Medium | protocol (baseline) | A captured login transcript is an offline password-guessing oracle (design limitation) |
 | L1 | Low | core / wasm | OPRF output `rw` (password-derived secret) is not zeroized |
 | L2 | Low | server + client | Timing side channels (user-existence oracle; length via pre-hash) |
 | L3 | Low | server-node (ref) | No rate limiting by default → enumeration / probing / nonce spam |
@@ -59,6 +60,28 @@ production rely on a store with native TTL eviction (Redis `SET … EX`).
 `readJson` ([http.ts](../packages/server-node/src/http.ts)) concatenates all
 request chunks with no cap. A large body exhausts memory. **Recommend:** enforce
 a small maximum body size and reject oversized requests early.
+
+### M3 — Offline guessing from an observed login transcript (baseline profile)
+
+Found on 2026-09-30, after the original review, while writing public positioning
+material. This is a **design-level limitation, not an implementation bug**, and
+it was missing from the original threat analysis.
+
+In the baseline profile the login signature `σ` verifies under the user's
+public key. An adversary who observes one login (`uid`, `salt_c`, `n`, `σ` — for
+example through a TLS-terminating proxy, a logging middlebox, or a connection
+without working TLS) can test a candidate password offline: derive
+`pk' = Basalt(Norm(pw', uid), salt_c)·G` and check `Verify(pk', M(uid, n), σ)`.
+The cost is one Basalt evaluation per guess — the same capability as an attacker
+holding the user's database record. Nonce binding prevents *replaying* `σ`, but
+not this.
+
+**Status:** documented as spec [§5.4 Threat D](clasp-spec.md), and the spec no
+longer describes CLASP as an aPAKE. **Mitigations:** TLS is a hard requirement;
+the OPRF profile closes the exposure (guesses then need online server queries).
+Baseline CLASP must not be presented as protecting the password on a hostile
+network by itself. Deployments whose transport may be observed should use
+CLASP-OPRF or a standardized, formally analyzed aPAKE (e.g., OPAQUE, RFC 9807).
 
 ### L1 — OPRF `rw` not zeroized
 
@@ -127,6 +150,8 @@ Fixed in the same session; all tests remain green (core 13, server 7, integratio
 - **L5** — the server derives per-purpose subkeys from `serverSecret` via HKDF-SHA256 (reg-token / pseudo-salt / session).
 - **L2** — server paths equalized: `login/init` always computes the pseudo-salt, and `login/verify` runs an Ed25519 verify against a dummy key for unknown users. (The client-side pre-hash length signal is documented, not eliminated.)
 
+- **M3** (added 2026-09-30) — not a code fix: the spec now documents the exposure (§5.4) and no longer calls CLASP an aPAKE; the OPRF profile is the mitigation.
+
 Deferred by design: **L3** (a real rate limiter is deployment infrastructure — the interface and requirement are in place) and **I1–I4** (informational / application-layer or documented placeholders).
 
 ## Checked and found sound
@@ -146,7 +171,12 @@ Deferred by design: **L3** (a real rate limiter is deployment infrastructure —
 
 ## Limitations of this review
 
-Self-review (not independent); no side-channel measurement; no formal
-verification; no adversarial cryptographic analysis; no real-browser runtime
-testing. Findings here reduce risk but do not substitute for an independent
-professional audit.
+- Self-review, not independent. Finding M3 was missed by the original pass and
+  only surfaced later — exactly the kind of gap an independent review exists to
+  catch.
+- No side-channel measurement.
+- No formal verification and no adversarial cryptographic analysis.
+- No real-browser runtime testing.
+
+Findings here reduce risk but do not substitute for an independent professional
+audit.

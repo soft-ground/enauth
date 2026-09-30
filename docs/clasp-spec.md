@@ -27,7 +27,7 @@ This shift achieves three properties simultaneously:
 2. **Pass-the-Hash / replay resistance** — the value crossing the network is bound to a one-time nonce, so a captured value cannot be reused.
 3. **Database-leak resistance** — the stored value is a public key; even if leaked it cannot be used directly, and offline cracking cost remains that of Basalt (memory-hard).
 
-CLASP is a minimal skeleton of the SRP/OPAQUE-family **asymmetric PAKE (aPAKE)**, expressed with a password-derived signing key, a nonce challenge-response, and an OPRF.
+CLASP borrows ideas from the SRP/OPAQUE family of asymmetric PAKEs — a password-derived key, a nonce challenge-response, and an OPRF — but it is **not** a formally analyzed aPAKE. In particular, the baseline profile does not resist offline password guessing from an observed login transcript (see §5.4); it relies on TLS for that, and the OPRF profile (§3.3) removes the exposure.
 
 ---
 
@@ -236,14 +236,28 @@ Moving heavy computation to the client removes server-side Argon2id DoS but intr
 3. **Malicious / lightweight client (skipping the work)** — using a custom client that skips Basalt.
    → Registering an arbitrary `pk` is possible, but login still requires the correct `pw → A → sk`. Skipping only weakens the **attacker's own account** and does not harm protocol integrity. Note that offline cracking runs on the attacker's own hardware, so `(M, T, P)` must be set as a **security bound**, not tuned to low-end clients.
 
-### 5.4 Summary
+### 5.4 Threat D — Offline Guessing from an Observed Login Transcript
+
+**Attack:** an adversary that can see a login — a TLS-terminating proxy, a logging middlebox, or a connection where TLS is broken or absent — observes `uid`, `salt_c`, `n`, and `σ`. In the baseline profile, for each candidate password `pw'` the adversary computes `A' = Basalt(Norm(pw', uid), salt_c)` and `pk' = A'·G`, then checks `Verify(pk', M(uid, n), σ)`. A match confirms the password. `σ` therefore acts as an offline verifier: the observer gains the same capability as an attacker holding that user's database record (§5.2), at the cost of one Basalt evaluation per guess.
+
+**Why replay resistance does not cover this:** the nonce binding stops a captured `σ` from authenticating a *new* session, but it does not hide the information needed to test password guesses.
+
+**Defenses and limits:**
+- **TLS is a hard requirement.** Baseline CLASP assumes the login transcript is not observable by an adversary; it must not be described as protecting the password on a hostile network by itself.
+- **The OPRF profile (§3.3) closes this exposure.** Without `k_oprf` the adversary cannot compute the OPRF output for a guess, so every guess requires an online `oprf_eval` call and is rate-limitable.
+- **Not a PAKE.** A formally analyzed aPAKE such as OPAQUE (RFC 9807) is designed so that a passive observer learns nothing usable for offline guessing in every configuration. Baseline CLASP does not have this property. Deployments whose transport may be observed should use CLASP-OPRF or a standardized aPAKE.
+
+For comparison, in the naive design (the client sends `A`) a captured value is immediately usable to log in; here it can only be used for cost-bounded guessing.
+
+### 5.5 Summary
 
 | Threat | Naive client-side hashing | CLASP |
 |---|---|---|
 | Server DoS | Defended (core goal) | Defended + residual surfaces closed |
 | Pass-the-Hash / replay | Vulnerable (static `A` sent) | Nonce-bound signature + single-use |
 | DB-leak reuse | Vulnerable (`H(A)` replayed) | Public key stored, replay impossible |
-| Offline dictionary | Basalt cost retained | Same + ceiling removed via OPRF |
+| Offline dictionary (DB leak) | Basalt cost retained | Same + ceiling removed via OPRF |
+| Offline guessing from a captured transcript | Vulnerable (captured `A` is the credential) | Basalt cost per guess (baseline); online-only with OPRF |
 | Timing / length leakage | Implementation-dependent | Fixed preimage + Argon2id + WASM |
 
 ---
