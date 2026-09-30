@@ -43,6 +43,60 @@ SDK, interop vectors, and an HTTP integration test). It has undergone an
 **internal** security review but **no independent audit**, so it is **not
 production-ready — do not use it to protect real accounts yet.**
 
+## How CLASP relates to bcrypt and Argon2id
+
+CLASP does not replace Argon2id — it is built on it. bcrypt and Argon2id are
+password-hashing *functions*; CLASP is a *login protocol* that decides where the
+hashing runs and what is sent and stored. Basalt runs Argon2id on the client, and
+the server keeps only a public key.
+
+| | Server-side hashing (bcrypt / Argon2id) | CLASP |
+|---|---|---|
+| Where the memory-hard work runs | Server, on every login | Client (browser WASM or native) |
+| Server work per login | One memory-hard hash | One signature verification |
+| What the server stores | A password hash that can be attacked offline | A public key derived from the password |
+| Password on the wire | Sent to the server (protected by TLS) | Never sent; a nonce-bound signature is |
+| Cost to crack a leaked database | One KDF evaluation per guess | The same in the baseline profile; online-only with the OPRF profile |
+| Works without client-side code | Yes | No |
+
+## Limitations
+
+Read these before deciding whether CLASP fits your use case.
+
+- **No independent audit.** See [Status](#status) and the [internal review](docs/security-review.md).
+- **Needs client-side code.** The client runs the KDF in WASM or native code. Plain HTML form posts, legacy clients, and some password-manager flows cannot use it.
+- **Client hardness is bounded by the weakest device.** The Basalt-v1 parameters are provisional and have not been measured on real devices ([tuning notes](docs/basalt-tuning.md)).
+- **The baseline profile relies on TLS.** An observer of a login transcript can test password guesses offline ([spec §5.4](docs/clasp-spec.md)). The OPRF profile removes this exposure, at the cost of an online OPRF service that must be highly available and whose key must be managed ([spec §6.3](docs/clasp-spec.md)).
+- **Delivered-code trust.** As with any browser-based authentication, a compromised server can ship JavaScript that steals the password. Password-authenticated key exchange protocols do not solve this either.
+- **Not a formally analyzed PAKE.** For a standardized, analyzed protocol with related goals, see OPAQUE ([RFC 9807](https://www.rfc-editor.org/rfc/rfc9807)).
+- **Application concerns are out of scope.** Session management, rate limiting, and account recovery are yours; the reference adapters are for development only.
+
+## Development
+
+Prerequisites: stable Rust with the `wasm32-unknown-unknown` target,
+[wasm-pack](https://rustwasm.github.io/wasm-pack/), and Node.js 24 with corepack.
+
+```sh
+# Rust core: format, lint, test (includes the interop-vector check)
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+
+# WASM + TypeScript
+wasm-pack build core/clasp-wasm --target nodejs --out-dir pkg-node
+corepack enable
+pnpm install --frozen-lockfile
+pnpm -r run build
+pnpm --filter @enauth/server test
+node --test test/integration.test.mjs
+```
+
+For the browser package, build with `--target web --out-dir pkg` and then run
+`node scripts/finalize-wasm-package.mjs` so the licenses and third-party notices
+ship with the binary. After any `Cargo.lock` change, regenerate the notices with
+`node scripts/generate-third-party-notices.mjs`. Interop vectors are described in
+[vectors/README.md](vectors/README.md).
+
 ## License
 
 Licensed under either of
