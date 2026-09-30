@@ -75,6 +75,13 @@ jobs:
       - name: Build WASM (web)
         run: wasm-pack build core/clasp-wasm --target web --out-dir pkg
 
+      # Cargo.lock changes (e.g. dependency updates) must be accompanied by a
+      # regenerated notices file. Run after the wasm build so all crates are fetched.
+      - name: Third-party notices are up to date
+        run: |
+          node scripts/generate-third-party-notices.mjs
+          git diff --exit-code -- THIRD-PARTY-NOTICES.md core/clasp-wasm/THIRD-PARTY-NOTICES.md
+
       # Fails if the npm tarball would ship the binary without its licenses/notices.
       - name: Package WASM with licenses (verify tarball)
         run: node scripts/finalize-wasm-package.mjs core/clasp-wasm/pkg

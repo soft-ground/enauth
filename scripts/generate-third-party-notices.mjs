@@ -45,12 +45,17 @@ for (const line of cargo([
   if (m) shipped.add(`${m[1]}@${m[2]}`);
 }
 
+// Plain code-unit comparison: unlike localeCompare it does not depend on the
+// machine's locale/ICU data, so the output is byte-identical on every platform
+// (CI verifies the committed file is up to date).
+const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 // 2. Metadata (license expression, repository, source directory) for each.
 const metadata = JSON.parse(cargo(["metadata", "--format-version", "1", "--locked"]));
 const crates = metadata.packages
   .filter((p) => p.source !== null) // skip workspace members (this project)
   .filter((p) => shipped.has(`${p.name}@${p.version}`))
-  .sort((a, b) => a.name.localeCompare(b.name) || a.version.localeCompare(b.version));
+  .sort((a, b) => cmp(a.name, b.name) || cmp(a.version, b.version));
 
 // 3. Collect license texts, grouped by identical (normalized) content.
 const normalize = (text) =>
@@ -104,7 +109,7 @@ for (const c of crates) {
 }
 
 const ordered = [...groups.entries()].sort(
-  (a, b) => a[1][0].name.localeCompare(b[1][0].name) || a[0].localeCompare(b[0]),
+  (a, b) => cmp(a[1][0].name, b[1][0].name) || cmp(a[1][0].version, b[1][0].version) || cmp(a[0], b[0]),
 );
 out.push("", "## License texts", "");
 ordered.forEach(([text, list], i) => {
