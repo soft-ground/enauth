@@ -1,5 +1,7 @@
 # enauth
 
+[![CI](https://github.com/soft-ground/enauth/actions/workflows/ci.yml/badge.svg)](https://github.com/soft-ground/enauth/actions/workflows/ci.yml)
+
 Enhanced authentication method. `enauth` implements **CLASP** — *Client-side Load-shifted Authentication via Split Proof* — a password-authentication protocol that moves the heavy memory-hard hashing to the client and leaves the server only lightweight verification.
 
 ## Why
