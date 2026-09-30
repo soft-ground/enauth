@@ -75,6 +75,10 @@ jobs:
       - name: Build WASM (web)
         run: wasm-pack build core/clasp-wasm --target web --out-dir pkg
 
+      # Fails if the npm tarball would ship the binary without its licenses/notices.
+      - name: Package WASM with licenses (verify tarball)
+        run: node scripts/finalize-wasm-package.mjs core/clasp-wasm/pkg
+
       - name: Build WASM (nodejs)
         run: wasm-pack build core/clasp-wasm --target nodejs --out-dir pkg-node
 
