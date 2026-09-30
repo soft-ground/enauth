@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust core (fmt, clippy, test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (warnings are errors)
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      # Includes the interop-vector check (tests/vectors.rs re-verifies vectors/*.json).
+      - name: Test
+        run: cargo test --workspace --locked
+
+      # The 64 MiB Basalt-v1 profile is too heavy for the default debug run.
+      - name: Basalt-v1 profile smoke test (release)
+        run: cargo test -p clasp-core --release --locked -- --ignored
+
+  js:
+    name: WASM + TypeScript (build, typecheck, tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-pack
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # pnpm version is pinned by "packageManager" in package.json.
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The web bundle must build; the nodejs bundle is what the tests load.
+      - name: Build WASM (web)
+        run: wasm-pack build core/clasp-wasm --target web --out-dir pkg
+
+      - name: Build WASM (nodejs)
+        run: wasm-pack build core/clasp-wasm --target nodejs --out-dir pkg-node
+
+      - name: Build packages
+        run: pnpm -r run build
+
+      - name: Typecheck
+        run: pnpm -r exec tsc --noEmit
+
+      - name: Server tests
+        run: pnpm --filter @enauth/server test
+
+      - name: HTTP integration test
+        run: node --test test/integration.test.mjs
