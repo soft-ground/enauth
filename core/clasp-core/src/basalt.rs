@@ -17,7 +17,11 @@ pub struct Params {
 }
 
 /// Basalt-v1 (provisional; pending device measurement — see `docs/basalt-tuning.md`).
-pub const V1: Params = Params { m_kib: 65536, t: 3, p: 1 };
+pub const V1: Params = Params {
+    m_kib: 65536,
+    t: 3,
+    p: 1,
+};
 
 /// Resolve parameters for a stored `basalt_version`.
 pub fn params(version: &str) -> Option<Params> {
@@ -52,7 +56,11 @@ mod tests {
     use super::*;
 
     // Small, fast parameters for correctness tests (NOT the 64 MiB V1 profile).
-    const TEST: Params = Params { m_kib: 32, t: 1, p: 1 };
+    const TEST: Params = Params {
+        m_kib: 32,
+        t: 1,
+        p: 1,
+    };
     // A valid 16-byte salt (Argon2 requires >= 8 bytes).
     const SALT: &[u8] = b"0123456789abcdef";
 
@@ -81,8 +89,26 @@ mod tests {
 
     #[test]
     fn basalt_differs_by_params() {
-        let a = basalt(b"pw", SALT, &Params { m_kib: 32, t: 1, p: 1 }).unwrap();
-        let b = basalt(b"pw", SALT, &Params { m_kib: 32, t: 2, p: 1 }).unwrap();
+        let a = basalt(
+            b"pw",
+            SALT,
+            &Params {
+                m_kib: 32,
+                t: 1,
+                p: 1,
+            },
+        )
+        .unwrap();
+        let b = basalt(
+            b"pw",
+            SALT,
+            &Params {
+                m_kib: 32,
+                t: 2,
+                p: 1,
+            },
+        )
+        .unwrap();
         assert_ne!(a.as_ref(), b.as_ref());
     }
 

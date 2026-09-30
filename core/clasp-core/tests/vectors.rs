@@ -32,7 +32,7 @@ fn vectors_dir() -> PathBuf {
 /// `"CLASP-AUTH-v1" ‖ u32be(len(uid)) ‖ uid ‖ nonce`.
 fn build_auth_message(uid: &str, nonce: &[u8]) -> Vec<u8> {
     let mut m = b"CLASP-AUTH-v1".to_vec();
-    m.extend_from_slice(&(uid.as_bytes().len() as u32).to_be_bytes());
+    m.extend_from_slice(&(uid.len() as u32).to_be_bytes());
     m.extend_from_slice(uid.as_bytes());
     m.extend_from_slice(nonce);
     m
@@ -48,7 +48,10 @@ fn check_or_write(name: &str, value: Value) {
         let raw = std::fs::read_to_string(&path)
             .unwrap_or_else(|_| panic!("missing {name}; regenerate with CLASP_REGEN_VECTORS=1"));
         let existing: Value = serde_json::from_str(&raw).unwrap();
-        assert_eq!(existing, value, "{name} out of date; regenerate with CLASP_REGEN_VECTORS=1");
+        assert_eq!(
+            existing, value,
+            "{name} out of date; regenerate with CLASP_REGEN_VECTORS=1"
+        );
     }
 }
 
@@ -71,7 +74,11 @@ fn norm_vectors() -> Value {
 }
 
 fn basalt_vectors() -> Value {
-    let p = basalt::Params { m_kib: 32, t: 1, p: 1 };
+    let p = basalt::Params {
+        m_kib: 32,
+        t: 1,
+        p: 1,
+    };
     let preimage = b"basalt-preimage-0123456789";
     let salt_c = b"0123456789abcdef";
     let a = basalt::basalt(preimage, salt_c, &p).unwrap();
@@ -132,7 +139,11 @@ fn transcript_vectors() -> Value {
     let uid = "erin@example.com";
     let salt_c = [0x22u8; 16];
     let nonce = [0x33u8; 32];
-    let p = basalt::Params { m_kib: 32, t: 1, p: 1 };
+    let p = basalt::Params {
+        m_kib: 32,
+        t: 1,
+        p: 1,
+    };
     let message = build_auth_message(uid, &nonce);
 
     // Baseline: A = Basalt(Norm(pw,uid), salt_c)
