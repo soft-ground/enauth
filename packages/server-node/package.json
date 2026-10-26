@@ -11,7 +11,7 @@
     "test": "tsc -p tsconfig.json && node --test \"dist/**/*.test.js\""
   },
   "dependencies": {
-    "@noble/curves": "^1.6.0"
+    "@noble/curves": "^2.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.7.0"
