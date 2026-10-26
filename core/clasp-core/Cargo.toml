@@ -22,7 +22,7 @@ voprf = { version = "0.5", features = ["ristretto255"] }
 rand_core = "0.6"
 
 [dev-dependencies]
-hex-literal = "0.4"
+hex-literal = "1.1"
 rand_chacha = "0.3"
 hex = "0.4"
 serde_json = "1"
